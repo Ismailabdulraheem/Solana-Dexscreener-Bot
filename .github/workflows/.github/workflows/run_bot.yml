@@ -1,0 +1,39 @@
+name: Run Dexscreener Bot
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install jupyter nbconvert pandas numpy requests
+
+      - name: Run discover_pools
+        run: jupyter nbconvert --to notebook --execute --inplace 01-discover_pools.ipynb
+
+      - name: Run snapshot_collector
+        run: jupyter nbconvert --to notebook --execute --inplace 02-snapshot_collector.ipynb
+
+      - name: Run telegram_alerts
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+        run: jupyter nbconvert --to notebook --execute --inplace 03-telegram_alerts.ipynb
+
+      - name: Commit updated databases
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add screener.db past_alerts.db
+          git diff --staged --quiet || git commit -m "Automated run: update pools and alerts"
+          git push
